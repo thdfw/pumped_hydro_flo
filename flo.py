@@ -241,7 +241,7 @@ if __name__ == "__main__":
     # reg = [0]*len(lmp)
 
     flo_params = FloParamsPumpedHydro(
-        FloHours=48,
+        FloHours=len(lmp),
         Lmp=lmp,
         RegMcp=reg,
     )

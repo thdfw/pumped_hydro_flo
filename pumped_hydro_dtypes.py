@@ -58,7 +58,6 @@ class DNode():
         # Dijkstra's algorithm
         self.pathcost = 0 if time_slice==self.params.horizon else 1e9
         self.next_node: DNode = None     
-        self.index: Optional[int] = None   
 
     def __repr__(self):
         return f"Node[{self.time_slice}, {self.energy_slice}/{self.params.energy_discretization}]"
