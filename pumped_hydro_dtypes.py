@@ -37,7 +37,7 @@ class DParams():
         self.horizon = flo_params.FloHours
         self.energy_discretization = flo_params.EnergyDiscretization
         self.storage_capacity_mwh = flo_params.StoreMwh
-        self.initial_energy_slice = flo_params.InitialEnergySlice+1
+        self.initial_energy_slice = flo_params.InitialEnergySlice
         self.reg_midpoint_mw = flo_params.RegMidpointMw
         self.generation_mw = flo_params.GenerationMw
         self.pumping_mw = flo_params.PumpingMw
