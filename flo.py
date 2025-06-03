@@ -108,13 +108,11 @@ class DGraph():
             costs_lmp.append(cost_lmp)
             costs_reg.append(cost_reg)
             costs_total.append(round(edge_i.cost))
-            print(node_i)
             node_i = node_i.next_node
 
         # First dataframe: the Dijkstra graph
         dijkstra_pathcosts = {}
         nodes_by_energy = sorted(self.nodes[0], key=lambda n: n.energy_slice)
-        dijkstra_pathcosts[''] = [np.nan]*len(nodes_by_energy)
         dijkstra_pathcosts['Stored MWh'] = sorted([round(n.energy,2) for n in nodes_by_energy])
         dijkstra_pathcosts['Index'] = sorted(list(range(len(nodes_by_energy))))
         dijkstra_nextnodes = dijkstra_pathcosts.copy()
@@ -143,19 +141,34 @@ class DGraph():
         shortestpath_df.loc[3] = ['Profit - Reg'] + ['USD'] + [-round(x,2) for x in costs_reg] + [0]
 
         # Fourth dataframe: the results
-        total_usd = -round(self.initial_node.pathcost)
-        total_generated = round(sum(generated),1)
-        total_pumped = round(sum(pumped),1)
-        results = ['Profit ($)', total_usd, 'Generated (MWh)', total_generated, 'Pumped (MWh)', total_pumped]
+        results = [
+            "Profit ($M)", round(-self.initial_node.pathcost/1e6,1), 
+            "LMP ($M)", round(-sum(costs_lmp)/1e6,1),
+            "Reg ($M)", round(-sum(costs_reg)/1e6,1),
+            "Gen (MWh)", round(sum(generated)), 
+            "Pump (MWh)", round(sum(pumped)),
+            'PARAMETERS',
+            'Year', self.params.flo_params.Year,
+            'Location', self.params.flo_params.LocationId,
+            'GenerationMw', self.params.flo_params.GenerationMw,
+            'PumpingMw', self.params.flo_params.PumpingMw,
+            'RegMidpointMw', self.params.flo_params.RegMidpointMw,
+            'StoreMwh', self.params.flo_params.StoreMwh,
+            'PumpLossPercent', self.params.flo_params.PumpLossPercent,
+            'GenLossPercent', self.params.flo_params.GenLossPercent,
+            'FloStartHr', self.params.flo_params.FloStartHr,
+            'FloHours', self.params.flo_params.FloHours,
+            'InitialEnergySlice', self.params.flo_params.InitialEnergySlice,
+            ]
         results_df = pd.DataFrame({'RESULTS':results})
         
         # Highlight shortest path
         highlight_positions = []
         node_i = self.initial_node
         while node_i.next_node is not None:
-            highlight_positions.append((node_i.energy_slice+len(forecast_df)+len(shortestpath_df)+2, 3+node_i.time_slice))
+            highlight_positions.append((node_i.energy_slice+1+len(forecast_df)+len(shortestpath_df)+2, 3+node_i.time_slice))
             node_i = node_i.next_node
-        highlight_positions.append((node_i.energy_slice+len(forecast_df)+len(shortestpath_df)+2, 3+node_i.time_slice))
+        highlight_positions.append((node_i.energy_slice+1+len(forecast_df)+len(shortestpath_df)+2, 3+node_i.time_slice))
         
         # Add the parameters to a seperate sheet
         parameters = self.params.flo_params.to_dict()
@@ -171,20 +184,20 @@ class DGraph():
             forecast_df.to_excel(writer, index=False, startcol=1, sheet_name='Next node')
             shortestpath_df.to_excel(writer, index=False, startcol=1, startrow=len(forecast_df)+1, sheet_name='Pathcost')
             shortestpath_df.to_excel(writer, index=False, startcol=1, startrow=len(forecast_df)+1, sheet_name='Next node')
-            dijkstra_pathcosts_df.to_excel(writer, index=False, startrow=len(forecast_df)+len(shortestpath_df)+2, sheet_name='Pathcost')
-            dijkstra_nextnodes_df.to_excel(writer, index=False, startrow=len(forecast_df)+len(shortestpath_df)+2, sheet_name='Next node')
+            dijkstra_pathcosts_df.to_excel(writer, index=False, startcol=1, startrow=len(forecast_df)+len(shortestpath_df)+2, sheet_name='Pathcost')
+            dijkstra_nextnodes_df.to_excel(writer, index=False, startcol=1, startrow=len(forecast_df)+len(shortestpath_df)+2, sheet_name='Next node')
             parameters_df.to_excel(writer, index=False, sheet_name='Parameters')
 
             # Get the sheets after they've been created
             pathcost_sheet: Worksheet = writer.sheets['Pathcost']
             nextnode_sheet: Worksheet = writer.sheets['Next node']
             parameters_sheet: Worksheet = writer.sheets['Parameters']
-            for row in pathcost_sheet['A1:A10']:
+            for row in pathcost_sheet['A1:A34']:
                 for cell in row:
                     cell: Cell = cell
                     cell.alignment = Alignment(horizontal='center')
                     cell.font = Font(bold=True)
-            for row in nextnode_sheet['A1:A10']:
+            for row in nextnode_sheet['A1:A34']:
                 for cell in row:
                     cell: Cell = cell
                     cell.alignment = Alignment(horizontal='center')
@@ -206,9 +219,13 @@ class DGraph():
 
             # Highlight shortest path
             highlight_fill = PatternFill(start_color='72ba93', end_color='72ba93', fill_type='solid')
-            for row in range(len(forecast_df)+len(shortestpath_df)+2):
+            highlight_fill_2 = PatternFill(start_color='e8b38e', end_color='e8b38e', fill_type='solid')
+            for row in range(len(forecast_df)+len(shortestpath_df)+2+1):
                 pathcost_sheet.cell(row=row+1, column=1).fill = highlight_fill
                 nextnode_sheet.cell(row=row+1, column=1).fill = highlight_fill
+            for row in range(len(forecast_df)+len(shortestpath_df)+2+1,len(forecast_df)+len(shortestpath_df)+2+1+23):
+                pathcost_sheet.cell(row=row+1, column=1).fill = highlight_fill_2
+                nextnode_sheet.cell(row=row+1, column=1).fill = highlight_fill_2
             for row, col in highlight_positions:
                 pathcost_sheet.cell(row=row+1, column=col+1).fill = highlight_fill
                 nextnode_sheet.cell(row=row+1, column=col+1).fill = highlight_fill
@@ -221,14 +238,10 @@ if __name__ == "__main__":
     df['regmcp'] = df['regmcp'].str.replace(',', '').astype(float)
     lmp = list(df['lmp'])
     reg = list(df['regmcp'])
-    reg = [0]*len(lmp)
+    # reg = [0]*len(lmp)
 
     flo_params = FloParamsPumpedHydro(
-        FloHours=len(lmp),
-        StoreMwh=2800,
-        GenerationMw=500,
-        PumpingMw=500,
-        RegMidpointMw=350,
+        FloHours=48,
         Lmp=lmp,
         RegMcp=reg,
     )
