@@ -238,12 +238,48 @@ if __name__ == "__main__":
     df['regmcp'] = df['regmcp'].str.replace(',', '').astype(float)
     lmp = list(df['lmp'])
     reg = list(df['regmcp'])
-    # reg = [0]*len(lmp)
+
+    print("\nHi George")
+    year = input("Year (leave blank for 2024): ")
+    year = 2024 if year == "" else int(year)
+    flo_start_hr = input("FloStartHr (leave blank for 1): ")
+    flo_start_hr = 1 if flo_start_hr == "" else int(flo_start_hr)
+    flo_hours = input("FloHours (leave blank for 8760): ")
+    flo_hours = 8760 if flo_hours == "" else int(flo_hours)
+    store_mwh = input("StoreMwh (leave blank for 2800): ")
+    store_mwh = 2800 if store_mwh == "" else int(store_mwh)
+    generation_mw = input("GenerationMw (leave blank for 500): ")
+    generation_mw = 500 if generation_mw == "" else int(generation_mw)
+    pumping_mw = input("PumpingMw (leave blank for 500): ")
+    pumping_mw = 500 if pumping_mw == "" else int(pumping_mw)
+    reg_midpoint_mw = input("RegMidpointMw (leave blank for 350): ")
+    reg_midpoint_mw = 350 if reg_midpoint_mw == "" else int(reg_midpoint_mw)
+    pump_loss_percent = input("PumpLossPercent (leave blank for 10): ")
+    pump_loss_percent = 10 if pump_loss_percent == "" else int(pump_loss_percent)
+    gen_loss_percent = input("GenLossPercent (leave blank for 10): ")
+    gen_loss_percent = 10 if gen_loss_percent == "" else int(gen_loss_percent)
+    location_id = input("LocationId (leave blank for 4001): ")
+    location_id = 4001 if location_id == "" else int(location_id)
+    energy_discretization = input("EnergyDiscretization (leave blank for 100): ")
+    energy_discretization = 100 if energy_discretization == "" else int(energy_discretization)
+    initial_energy_slice = input("InitialEnergySlice (leave blank for 50): ")
+    initial_energy_slice = 50 if initial_energy_slice == "" else int(initial_energy_slice)
 
     flo_params = FloParamsPumpedHydro(
-        FloHours=len(lmp),
+        Year=int(year),
+        FloStartHr=int(flo_start_hr),
+        FloHours=int(flo_hours),
+        StoreMwh=int(store_mwh),
+        GenerationMw=int(generation_mw),
+        PumpingMw=int(pumping_mw),
+        RegMidpointMw=int(reg_midpoint_mw),
+        PumpLossPercent=int(pump_loss_percent),
+        GenLossPercent=int(gen_loss_percent),
+        LocationId=int(location_id),
         Lmp=lmp,
         RegMcp=reg,
+        EnergyDiscretization=int(energy_discretization),
+        InitialEnergySlice=int(initial_energy_slice),
     )
     dgraph = DGraph(flo_params)
     dgraph.export_to_excel()
