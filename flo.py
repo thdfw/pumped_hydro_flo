@@ -89,6 +89,7 @@ class DGraph():
                 node.next_node = best_edge.head
 
     def export_to_excel(self):
+        print("\nExporting to Excel...")
         # Along the shortest path
         generated, pumped, costs_lmp, costs_reg, costs_total = [], [], [], [], []
         node_i = self.initial_node
@@ -283,3 +284,4 @@ if __name__ == "__main__":
     )
     dgraph = DGraph(flo_params)
     dgraph.export_to_excel()
+    print("\nDone!")
