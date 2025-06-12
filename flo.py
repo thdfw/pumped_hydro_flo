@@ -46,7 +46,7 @@ class DGraph():
             for current_node in self.nodes[time_slice]:
                 self.edges[current_node] = []
 
-                # Discharge as much as possible
+                # [Generate/Discharge] as much as possible
                 discharge_for_empty = current_node.energy - self.min_node_energy
                 max_discharge_mw = min(self.params.generation_mw, discharge_for_empty)
                 mwh_to_grid = max_discharge_mw * (1-self.params.gen_loss_percent/100) 
@@ -55,15 +55,15 @@ class DGraph():
                 next_node = self.find_next_node(current_node, mwh_to_store)
                 self.edges[current_node].append(DEdge(current_node, next_node, cost_usd, mwh_to_grid))
 
-                # Discharge at regulation midpoint if the store is not close to empty
-                if discharge_for_empty > self.params.generation_mw:
+                # [Generate/Discharge] at regulation midpoint if the store is not close to empty
+                if self.params.flo_params.RegulationGenerating and discharge_for_empty > self.params.generation_mw:
                     mwh_to_grid = self.params.reg_midpoint_mw 
                     mwh_to_store = -self.params.reg_midpoint_mw / (1-self.params.gen_loss_percent/100) 
                     cost_usd = -mwh_to_grid*lmp_usd_mwh - (self.params.generation_mw-self.params.reg_midpoint_mw)*reg_mcp_usd_mw
                     next_node = self.find_next_node(current_node, mwh_to_store)
                     self.edges[current_node].append(DEdge(current_node, next_node, cost_usd, mwh_to_grid))
                 
-                # Charge as much as possible
+                # [Pump/Charge] as much as possible
                 charge_for_full = (self.max_node_energy - current_node.energy) / (1-self.params.pump_loss_percent/100)
                 max_charge_mw = min(self.params.pumping_mw, charge_for_full)
                 mwh_to_grid = -max_charge_mw
@@ -71,6 +71,14 @@ class DGraph():
                 cost_usd = -mwh_to_grid*lmp_usd_mwh
                 next_node = self.find_next_node(current_node, mwh_to_store)
                 self.edges[current_node].append(DEdge(current_node, next_node, cost_usd, mwh_to_grid))
+
+                # [Pumping/Charge] at regulation midpoint if the store is not close to full
+                if self.params.flo_params.RegulationPumping and charge_for_full < self.params.generation_mw:
+                    mwh_to_grid = -self.params.reg_midpoint_mw
+                    mwh_to_store = self.params.reg_midpoint_mw * (1-self.params.pump_loss_percent/100)
+                    cost_usd = -mwh_to_grid*lmp_usd_mwh - (self.params.pumping_mw-self.params.reg_midpoint_mw)*reg_mcp_usd_mw
+                    next_node = self.find_next_node(current_node, mwh_to_store)
+                    self.edges[current_node].append(DEdge(current_node, next_node, cost_usd, mwh_to_grid))
 
                 # Do nothing
                 mwh_to_grid = 0
@@ -97,18 +105,18 @@ class DGraph():
             edge_i = [e for e in self.edges[node_i] if e.tail==node_i and e.head==node_i.next_node][0]
             if edge_i.mwh_to_grid > 0:
                 pump = 0
-                generate = round(edge_i.mwh_to_grid, 1)
+                generate = edge_i.mwh_to_grid
             else:
-                pump = -round(edge_i.mwh_to_grid, 1)
+                pump = -edge_i.mwh_to_grid
                 generate = 0
             lmp_price = self.params.lmp[node_i.time_slice]
-            cost_lmp = round(-edge_i.mwh_to_grid * lmp_price)
-            cost_reg = round(edge_i.cost-cost_lmp) if cost_lmp != edge_i.cost else 0
+            cost_lmp = -edge_i.mwh_to_grid * lmp_price
+            cost_reg = edge_i.cost-cost_lmp if cost_lmp != edge_i.cost else 0
             pumped.append(pump)
             generated.append(generate)
             costs_lmp.append(cost_lmp)
             costs_reg.append(cost_reg)
-            costs_total.append(round(edge_i.cost))
+            costs_total.append(edge_i.cost)
             node_i = node_i.next_node
 
         # First dataframe: the Dijkstra graph
@@ -159,7 +167,10 @@ class DGraph():
             'GenLossPercent', self.params.flo_params.GenLossPercent,
             'FloStartHr', self.params.flo_params.FloStartHr,
             'FloHours', self.params.flo_params.FloHours,
+            'EnergyDiscretization', self.params.flo_params.EnergyDiscretization,
             'InitialEnergySlice', self.params.flo_params.InitialEnergySlice,
+            'RegulationPumping', self.params.flo_params.RegulationPumping,
+            'RegulationGenerating', self.params.flo_params.RegulationGenerating
             ]
         results_df = pd.DataFrame({'RESULTS':results})
         
@@ -193,12 +204,12 @@ class DGraph():
             pathcost_sheet: Worksheet = writer.sheets['Pathcost']
             nextnode_sheet: Worksheet = writer.sheets['Next node']
             parameters_sheet: Worksheet = writer.sheets['Parameters']
-            for row in pathcost_sheet['A1:A34']:
+            for row in pathcost_sheet['A1:A40']:
                 for cell in row:
                     cell: Cell = cell
                     cell.alignment = Alignment(horizontal='center')
                     cell.font = Font(bold=True)
-            for row in nextnode_sheet['A1:A34']:
+            for row in nextnode_sheet['A1:A40']:
                 for cell in row:
                     cell: Cell = cell
                     cell.alignment = Alignment(horizontal='center')
@@ -224,7 +235,7 @@ class DGraph():
             for row in range(len(forecast_df)+len(shortestpath_df)+2+1):
                 pathcost_sheet.cell(row=row+1, column=1).fill = highlight_fill
                 nextnode_sheet.cell(row=row+1, column=1).fill = highlight_fill
-            for row in range(len(forecast_df)+len(shortestpath_df)+2+1,len(forecast_df)+len(shortestpath_df)+2+1+23):
+            for row in range(len(forecast_df)+len(shortestpath_df)+2+1,len(forecast_df)+len(shortestpath_df)+2+1+29):
                 pathcost_sheet.cell(row=row+1, column=1).fill = highlight_fill_2
                 nextnode_sheet.cell(row=row+1, column=1).fill = highlight_fill_2
             for row, col in highlight_positions:
@@ -253,6 +264,10 @@ if __name__ == "__main__":
     generation_mw = 500 if generation_mw == "" else int(generation_mw)
     pumping_mw = input("PumpingMw (leave blank for 500): ")
     pumping_mw = 500 if pumping_mw == "" else int(pumping_mw)
+    regulation_pumping = input("RegulationPumping ('y' or 'n', leave blank for 'y'): ")
+    regulation_pumping = True if regulation_pumping!="n" else False
+    regulation_generating = input("RegulationGenerating ('y' or 'n', leave blank for 'y'): ")
+    regulation_generating = True if regulation_generating!="n" else False
     reg_midpoint_mw = input("RegMidpointMw (leave blank for 350): ")
     reg_midpoint_mw = 350 if reg_midpoint_mw == "" else int(reg_midpoint_mw)
     pump_loss_percent = input("PumpLossPercent (leave blank for 10): ")
@@ -281,6 +296,8 @@ if __name__ == "__main__":
         RegMcp=reg,
         EnergyDiscretization=int(energy_discretization),
         InitialEnergySlice=int(initial_energy_slice),
+        RegulationPumping=regulation_pumping,
+        RegulationGenerating=regulation_generating
     )
     dgraph = DGraph(flo_params)
     dgraph.export_to_excel()

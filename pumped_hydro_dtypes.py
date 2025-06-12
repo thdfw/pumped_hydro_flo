@@ -18,6 +18,8 @@ class FloParamsPumpedHydro(BaseModel):
     RegMcp: list = []
     EnergyDiscretization: int = 100
     InitialEnergySlice: float = 50
+    RegulationGenerating: bool = True
+    RegulationPumping: bool = True
     TypeName: Literal["flo.params.pumped_hydro"] = "flo.params.pumped_hydro"
     Version: Literal["000"] = "000"
 
