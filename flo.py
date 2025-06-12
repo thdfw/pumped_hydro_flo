@@ -46,36 +46,39 @@ class DGraph():
             for current_node in self.nodes[time_slice]:
                 self.edges[current_node] = []
 
-                # [Generate/Discharge] as much as possible
                 discharge_for_empty = current_node.energy - self.min_node_energy
+                charge_for_full = (self.max_node_energy - current_node.energy) / (1-self.params.pump_loss_percent/100)
                 max_discharge_mw = min(self.params.generation_mw, discharge_for_empty)
-                mwh_to_grid = max_discharge_mw * (1-self.params.gen_loss_percent/100) 
-                mwh_to_store = -max_discharge_mw
-                cost_usd = -mwh_to_grid*lmp_usd_mwh
-                next_node = self.find_next_node(current_node, mwh_to_store)
-                self.edges[current_node].append(DEdge(current_node, next_node, cost_usd, mwh_to_grid))
+                max_charge_mw = min(self.params.pumping_mw, charge_for_full)
+
+                # [Generate/Discharge] as much as possible
+                if max_discharge_mw > 0:
+                    mwh_to_grid = max_discharge_mw
+                    mwh_to_store = -mwh_to_grid / (1-self.params.gen_loss_percent/100)
+                    cost_usd = -mwh_to_grid*lmp_usd_mwh
+                    next_node = self.find_next_node(current_node, mwh_to_store)
+                    self.edges[current_node].append(DEdge(current_node, next_node, cost_usd, mwh_to_grid))
 
                 # [Generate/Discharge] at regulation midpoint if the store is not close to empty
                 if self.params.flo_params.RegulationGenerating and discharge_for_empty > self.params.generation_mw:
-                    mwh_to_grid = self.params.reg_midpoint_mw 
-                    mwh_to_store = -self.params.reg_midpoint_mw / (1-self.params.gen_loss_percent/100) 
+                    mwh_to_grid = self.params.reg_midpoint_mw
+                    mwh_to_store = -mwh_to_grid / (1-self.params.gen_loss_percent/100) 
                     cost_usd = -mwh_to_grid*lmp_usd_mwh - (self.params.generation_mw-self.params.reg_midpoint_mw)*reg_mcp_usd_mw
                     next_node = self.find_next_node(current_node, mwh_to_store)
                     self.edges[current_node].append(DEdge(current_node, next_node, cost_usd, mwh_to_grid))
                 
                 # [Pump/Charge] as much as possible
-                charge_for_full = (self.max_node_energy - current_node.energy) / (1-self.params.pump_loss_percent/100)
-                max_charge_mw = min(self.params.pumping_mw, charge_for_full)
-                mwh_to_grid = -max_charge_mw
-                mwh_to_store = max_charge_mw * (1-self.params.pump_loss_percent/100)
-                cost_usd = -mwh_to_grid*lmp_usd_mwh
-                next_node = self.find_next_node(current_node, mwh_to_store)
-                self.edges[current_node].append(DEdge(current_node, next_node, cost_usd, mwh_to_grid))
+                if max_charge_mw > 0:
+                    mwh_to_grid = -max_charge_mw
+                    mwh_to_store = -mwh_to_grid * (1-self.params.pump_loss_percent/100)
+                    cost_usd = -mwh_to_grid*lmp_usd_mwh
+                    next_node = self.find_next_node(current_node, mwh_to_store)
+                    self.edges[current_node].append(DEdge(current_node, next_node, cost_usd, mwh_to_grid))
 
                 # [Pumping/Charge] at regulation midpoint if the store is not close to full
-                if self.params.flo_params.RegulationPumping and charge_for_full < self.params.generation_mw:
+                if self.params.flo_params.RegulationPumping and charge_for_full > self.params.generation_mw:
                     mwh_to_grid = -self.params.reg_midpoint_mw
-                    mwh_to_store = self.params.reg_midpoint_mw * (1-self.params.pump_loss_percent/100)
+                    mwh_to_store = -mwh_to_grid * (1-self.params.pump_loss_percent/100)
                     cost_usd = -mwh_to_grid*lmp_usd_mwh - (self.params.pumping_mw-self.params.reg_midpoint_mw)*reg_mcp_usd_mw
                     next_node = self.find_next_node(current_node, mwh_to_store)
                     self.edges[current_node].append(DEdge(current_node, next_node, cost_usd, mwh_to_grid))
@@ -102,7 +105,12 @@ class DGraph():
         generated, pumped, costs_lmp, costs_reg, costs_total = [], [], [], [], []
         node_i = self.initial_node
         while node_i.next_node is not None:
-            edge_i = [e for e in self.edges[node_i] if e.tail==node_i and e.head==node_i.next_node][0]
+            # Find the edge to the next node
+            edge_i = [e for e in self.edges[node_i] if e.tail==node_i and e.head==node_i.next_node]
+            if len(edge_i) != 1:
+                raise ValueError(f"Found {len(edge_i)} edges from {node_i} to {node_i.next_node}")
+            edge_i = edge_i[0]
+            # Find the amount pumped or generated
             if edge_i.mwh_to_grid > 0:
                 pump = 0
                 generate = edge_i.mwh_to_grid
@@ -151,9 +159,9 @@ class DGraph():
 
         # Fourth dataframe: the results
         results = [
-            "Profit ($M)", round(-self.initial_node.pathcost/1e6,1), 
-            "LMP ($M)", round(-sum(costs_lmp)/1e6,1),
-            "Reg ($M)", round(-sum(costs_reg)/1e6,1),
+            "Profit ($)", round(-self.initial_node.pathcost), 
+            "LMP ($)", round(-sum(costs_lmp)),
+            "Reg ($)", round(-sum(costs_reg)),
             "Gen (MWh)", round(sum(generated)), 
             "Pump (MWh)", round(sum(pumped)),
             'PARAMETERS',
