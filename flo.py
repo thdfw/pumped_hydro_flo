@@ -254,8 +254,12 @@ class DGraph():
 if __name__ == "__main__":
 
     df = pd.read_csv('price_data.csv')
-    df['lmp'] = df['lmp'].str.replace(',', '').astype(float)
-    df['regmcp'] = df['regmcp'].str.replace(',', '').astype(float)
+    try:
+        df['lmp'] = df['lmp'].str.replace(',', '').astype(float)
+        df['regmcp'] = df['regmcp'].str.replace(',', '').astype(float)
+    except:
+        df['lmp'].astype(float)
+        df['regmcp'].astype(float)
     lmp = list(df['lmp'])
     reg = list(df['regmcp'])
 
